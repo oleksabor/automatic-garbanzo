@@ -18,6 +18,9 @@ namespace FluentFtpMT
 		
 		public static FtpListItem[] GetDirlisting(FtpClient cln, string formPath)
 		{
+			if (!cln.DirectoryExists(formPath))
+				return new FtpListItem[0];
+
 			var files = cln.GetListing(formPath);
 			if (files.Length == 0)
 			{
@@ -32,16 +35,19 @@ namespace FluentFtpMT
 
 		public static Image DownloadFile(FtpClient cln, FtpListItem listItem)
 		{
-				if (listItem.Type == FtpFileSystemObjectType.File)
+			if (listItem.Type == FtpFileSystemObjectType.File)
+			{
+				if (cln.Download(out byte[] memStream, listItem.FullName, 0))
 				{
-					cln.Download(out byte[] memStream, listItem.FullName, 0);
 					Log.DebugFormat("downloaded image:{0} {1}MB", listItem.FullName, memStream.Length / 1024 / 1024);
 					//counter.Inc(Counters.ftpImagesPerSecond);
 
 					return new Image(listItem.Name, memStream);
 				}
-				else
-					throw new ArgumentException("not a file");
+				else throw new ApplicationException($"fluentFtp has failed to download {listItem.FullName}");
+			}
+			else
+				throw new ArgumentException("not a file");
 		}
 
 		public static SslProtocols GetProtocol(string code)

@@ -21,14 +21,15 @@ namespace FluentFtpMT
 			var config = new WebSettings() {
 				User = "webdocuser",
 				Password = "1234qweR",
-				Url = "localhost",
-				//Port = 990,				21 by default
+				Url = "127.0.0.1",
+				//Port = 990, //			21 by default
 				PathGet = "/",
 				IgnoreCertificateError = true,
 				Formats = "\\.zip|\\.jpe?g|\\.pdf$",
+				//Wait = true,
 			};
 
-			const int count = 70;
+			const int count = 170;
 
 			Iterate(config, count);
 			Log.Info("done single thread");
@@ -50,8 +51,8 @@ namespace FluentFtpMT
 			//	.Select(_ =>
 			//	{
 			//		Thread.Sleep(300 * _);
-			//		return Task.Run(() => Iterate(configs[_], count));
-			//		}).ToArray();
+			//		return Task.Run(() => Iterate(config, 40));
+			//	}).ToArray();
 
 			//Task.WaitAll(tasks);
 			//Log.Info("done multithreading");
@@ -67,7 +68,7 @@ namespace FluentFtpMT
 					for (var q = 0; q < count; q++)
 					{
 						Log.InfoFormat("iterating {0}", q);
-						unit.GetFiles(new[] { "183085", "220924", "680605", });
+						unit.GetFiles(new[] { "183085", "220924", "680605", "notexists" });
 					}
 				}
 				catch (Exception e)
@@ -80,12 +81,13 @@ namespace FluentFtpMT
 	public class FtpUnit : IDisposable
 	{
 		static ILog Log = LogProvider.GetCurrentClassLogger();
-
+		private readonly WebSettings config;
 		Lazy<FtpClient> client;
 
 		public FtpUnit(WebSettings s)
 		{
 			client = new Lazy<FtpClient>(() => FtpsHelper.CreateClient(s));
+			this.config = s;
 		}
 
 		public void Dispose()
@@ -97,23 +99,45 @@ namespace FluentFtpMT
 			}
 		}
 
+		void ResetConnection()
+		{
+			Dispose();
+			client = new Lazy<FtpClient>(() => FtpsHelper.CreateClient(config));
+		}
+
+		void Wait()
+		{
+			if (config.Wait)
+				Thread.Sleep(500);
+		}
+
 		public void GetFiles(string[] dirNames)
 		{
 			foreach (var dn in dirNames)
 			{
-				var files = FtpsHelper.GetDirlisting(client.Value, dn);
-				foreach (var fi in files)
-					try
-					{
-						var image = FtpsHelper.DownloadFile(client.Value, fi);
-						Guard.ArgumentNotNull(image.Name, nameof(image.Name));
-						Guard.ArgumentNotNull(image.Value, nameof(image.Value));
-						Log.DebugFormat("downloaded file {0}", image.Name);
-					}
-					catch (Exception e)
-					{
-						Log.ErrorException("failed to get file {0}", e, fi.FullName);
-					}
+				try
+				{
+					var files = FtpsHelper.GetDirlisting(client.Value, dn);
+					Wait();
+					foreach (var fi in files)
+						try
+						{
+							var image = FtpsHelper.DownloadFile(client.Value, fi);
+							Guard.ArgumentNotNull(image.Name, nameof(image.Name));
+							Guard.ArgumentNotNull(image.Value, nameof(image.Value));
+							Log.DebugFormat("downloaded file {0}", image.Name);
+							Wait();
+						}
+						catch (Exception e)
+						{
+							Log.ErrorException("failed to get file {0}", e, fi.FullName);
+						}
+				}
+				catch (Exception ed)
+				{
+					Log.ErrorException("failed to get dir {0}", ed, dn);
+					ResetConnection();
+				}
 			}
 		}
 	}

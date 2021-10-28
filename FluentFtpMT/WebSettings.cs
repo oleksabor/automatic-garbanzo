@@ -32,5 +32,7 @@ namespace FluentFtpMT
 
 		[XmlAttribute("fastPooling")]
 		public bool FastPooling { get; set; }
+
+		public bool Wait { get; set; }
 	}
 }
